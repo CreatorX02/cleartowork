@@ -1,0 +1,355 @@
+// ClearToWork — Phase 1 schema (see files/07_MVP_PHASED_PRD.md §4)
+// Tenant isolation: every tenant table carries businessId; all queries go
+// through src/lib/tenant.ts guards. event_log is append-only (trigger in
+// the initial migration blocks UPDATE/DELETE).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Auth (Better Auth managed tables)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String       @id @default(uuid())
+  name          String
+  email         String       @unique
+  emailVerified Boolean      @default(false)
+  image         String?
+  phone         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  memberships   Membership[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(uuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verifications")
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy
+// ---------------------------------------------------------------------------
+
+enum Sector {
+  hospitality
+  food_service
+  care
+  other
+}
+
+enum Plan {
+  solo
+  standard
+  multi_site
+}
+
+enum BusinessStatus {
+  active
+  past_due
+  cancelled
+}
+
+model Business {
+  id               String         @id @default(uuid())
+  name             String
+  companyNumber    String?        @map("company_number")
+  sector           Sector
+  plan             Plan           @default(solo)
+  stripeCustomerId String?        @map("stripe_customer_id")
+  /// Days-before-expiry alert offsets, e.g. [90, 30, 14, 7, 0]
+  alertSchedule    Json           @default("[90, 30, 14, 7, 0]") @map("alert_schedule")
+  status           BusinessStatus @default(active)
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  sites       Site[]
+  memberships Membership[]
+  workers     Worker[]
+  alerts      Alert[]
+
+  @@map("businesses")
+}
+
+model Site {
+  id         String   @id @default(uuid())
+  businessId String   @map("business_id")
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  address    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  workers Worker[]
+
+  @@index([businessId])
+  @@map("sites")
+}
+
+enum Role {
+  owner
+  manager
+}
+
+model Membership {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId String   @map("business_id")
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  role       Role
+  /// Empty array = all sites (owner). Manager role arrives Phase 4.
+  siteIds    String[] @map("site_ids")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, businessId])
+  @@index([businessId])
+  @@map("memberships")
+}
+
+// ---------------------------------------------------------------------------
+// Workers and checks
+// ---------------------------------------------------------------------------
+
+enum ArrangementType {
+  employee
+  agency
+  gig
+  casual_zero_hours
+  subcontractor
+  other
+}
+
+enum RtwStatus {
+  not_checked
+  in_progress
+  passed
+  failed
+  refer
+  expired
+  follow_up_due
+}
+
+enum WorkerStatus {
+  active
+  ended
+  deleted_pending
+}
+
+model Worker {
+  id               String          @id @default(uuid())
+  businessId       String          @map("business_id")
+  business         Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  siteId           String          @map("site_id")
+  site             Site            @relation(fields: [siteId], references: [id])
+  fullName         String          @map("full_name")
+  dateOfBirth      DateTime        @map("date_of_birth") @db.Date
+  email            String?
+  phone            String?
+  roleTitle        String          @map("role_title")
+  arrangementType  ArrangementType @map("arrangement_type")
+  startDate        DateTime        @map("start_date") @db.Date
+  /// Set when employment ends; starts the retention clock (end + 2 years)
+  endDate          DateTime?       @map("end_date") @db.Date
+  rtwStatus        RtwStatus       @default(not_checked) @map("rtw_status")
+  permissionExpiry DateTime?       @map("permission_expiry") @db.Date
+  followUpDate     DateTime?       @map("follow_up_date") @db.Date
+  status           WorkerStatus    @default(active)
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  checks Check[]
+  alerts Alert[]
+
+  @@index([businessId, rtwStatus])
+  @@index([businessId, followUpDate])
+  @@index([businessId, permissionExpiry])
+  @@map("workers")
+}
+
+enum CheckType {
+  idsp_digital
+  share_code
+  manual_document
+}
+
+enum CheckStatus {
+  created
+  link_sent
+  opened
+  in_progress
+  complete
+  failed
+  expired
+}
+
+enum CheckOutcome {
+  pass
+  fail
+  refer
+}
+
+model Check {
+  id             String        @id @default(uuid())
+  businessId     String        @map("business_id")
+  workerId       String        @map("worker_id")
+  worker         Worker        @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  checkType      CheckType     @map("check_type")
+  idspSessionId  String?       @unique @map("idsp_session_id")
+  status         CheckStatus   @default(created)
+  outcome        CheckOutcome?
+  /// Vendor payload mapped to canonical form (04_API_SPEC.md §3)
+  methodDetail   Json?         @map("method_detail")
+  /// Statutory excuse date
+  checkedAt      DateTime?     @map("checked_at")
+  /// Share-code checks only. Application-layer encrypted before storage.
+  shareCode      String?       @map("share_code")
+  statutoryExcuse Boolean      @default(false) @map("statutory_excuse")
+  followUpDate   DateTime?     @map("follow_up_date") @db.Date
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  evidenceFiles EvidenceFile[]
+
+  @@index([workerId, createdAt(sort: Desc)])
+  @@index([businessId])
+  @@map("checks")
+}
+
+enum EvidenceSource {
+  idsp
+  upload
+  generated
+}
+
+model EvidenceFile {
+  id          String         @id @default(uuid())
+  businessId  String         @map("business_id")
+  checkId     String         @map("check_id")
+  check       Check          @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  /// Key in the private R2/S3 bucket. Access via presigned URLs only (≤24h).
+  storagePath String         @map("storage_path")
+  /// SHA-256 of file contents
+  fileHash    String         @map("file_hash")
+  source      EvidenceSource
+  contentType String         @map("content_type")
+  sizeBytes   Int            @map("size_bytes")
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  @@index([checkId])
+  @@map("evidence_files")
+}
+
+// ---------------------------------------------------------------------------
+// Alerts
+// ---------------------------------------------------------------------------
+
+enum AlertType {
+  expiry_90
+  expiry_30
+  expiry_14
+  expiry_7
+  expiry_today
+  check_incomplete
+  compliance_update
+}
+
+enum AlertChannel {
+  email
+  sms
+  in_app
+}
+
+model Alert {
+  id           String       @id @default(uuid())
+  businessId   String       @map("business_id")
+  business     Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  workerId     String?      @map("worker_id")
+  worker       Worker?      @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  alertType    AlertType    @map("alert_type")
+  channel      AlertChannel
+  sentAt       DateTime?    @map("sent_at")
+  snoozedUntil DateTime?    @map("snoozed_until")
+  /// Mandatory when snoozing
+  snoozeReason String?      @map("snooze_reason")
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  @@index([businessId, sentAt(sort: Desc)])
+  @@map("alerts")
+}
+
+// ---------------------------------------------------------------------------
+// Event log (append-only — migration adds a trigger blocking UPDATE/DELETE)
+// ---------------------------------------------------------------------------
+
+model EventLog {
+  id          String   @id @default(uuid())
+  /// Null for platform-level events
+  businessId  String?  @map("business_id")
+  /// Null for system actions
+  actorUserId String?  @map("actor_user_id")
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  action      String
+  before      Json?
+  after       Json?
+  ip          String?
+  userAgent   String?  @map("user_agent")
+  occurredAt  DateTime @default(now()) @map("occurred_at")
+
+  @@index([businessId, occurredAt(sort: Desc)])
+  @@index([entityType, entityId])
+  @@map("event_log")
+}
