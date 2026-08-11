@@ -2,8 +2,8 @@
   "mcpServers": {
     "railway": {
       "type": "local",
-      "command": "railway",
-      "args": ["mcp"],
+      "command": "npx",
+      "args": ["railway", "mcp"],
       "tools": ["*"]
     }
   }
