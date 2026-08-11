@@ -11,9 +11,10 @@
       },
       "tools": [
         "shell",
-        "network"
+        "network",
+        "filesystem"
       ],
-      "notes": "Conservative default tool list: shell and network. Store RAILWAY_TOKEN as a secret in your CI/runner environment and never commit secrets. If the MCP server needs additional capabilities (filesystem, process management, etc.), add them explicitly after review."
+      "notes": "Conservative default tool list: shell, network, and filesystem. Store RAILWAY_TOKEN as a secret in your CI/runner environment and never commit secrets. If the MCP server needs additional capabilities (process management, etc.), add them explicitly after review."
     }
   }
 }
