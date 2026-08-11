@@ -4,7 +4,13 @@
       "type": "local",
       "command": "npx",
       "args": ["railway", "mcp"],
-      "tools": ["*"]
+      "cwd": ".",
+      "env": {
+        "RAILWAY_TOKEN": "${RAILWAY_TOKEN}",
+        "NODE_ENV": "production"
+      },
+      "tools": ["*"],
+      "notes": "For least privilege replace tools:[\"*\"] with an explicit list of required tools; store RAILWAY_TOKEN as a secret in your CI/runner environment."
     }
   }
 }
