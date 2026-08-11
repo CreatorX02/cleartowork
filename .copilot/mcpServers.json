@@ -9,8 +9,11 @@
         "RAILWAY_TOKEN": "${RAILWAY_TOKEN}",
         "NODE_ENV": "production"
       },
-      "tools": ["*"],
-      "notes": "For least privilege replace tools:[\"*\"] with an explicit list of required tools; store RAILWAY_TOKEN as a secret in your CI/runner environment."
+      "tools": [
+        "shell",
+        "network"
+      ],
+      "notes": "Conservative default tool list: shell and network. Store RAILWAY_TOKEN as a secret in your CI/runner environment and never commit secrets. If the MCP server needs additional capabilities (filesystem, process management, etc.), add them explicitly after review."
     }
   }
 }
