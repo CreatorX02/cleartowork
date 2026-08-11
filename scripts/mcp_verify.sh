@@ -5,6 +5,14 @@ set -euo pipefail
 # Usage: ./scripts/mcp_verify.sh
 # Ensure RAILWAY_TOKEN is exported in your environment, or provide it in a .env file.
 
+if [ -f ".env" ]; then
+  # Load local env vars for verification convenience.
+  # shellcheck disable=SC1091
+  set -a
+  . ".env"
+  set +a
+fi
+
 if [ -z "${RAILWAY_TOKEN-}" ]; then
   echo "RAILWAY_TOKEN is not set. Please export RAILWAY_TOKEN=... or create a .env and load it before running this script."
   echo "Example: export RAILWAY_TOKEN=\"<token>\""
@@ -12,7 +20,11 @@ if [ -z "${RAILWAY_TOKEN-}" ]; then
 fi
 
 echo "Installing dependencies (if needed)..."
-npm install --no-audit --no-fund
+if [ -f "package-lock.json" ]; then
+  npm ci --no-audit --no-fund
+else
+  npm install --no-audit --no-fund
+fi
 
 echo "Starting railway MCP (via npx) — logs will stream to stdout. Press Ctrl-C to stop."
 

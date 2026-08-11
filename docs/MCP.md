@@ -3,7 +3,7 @@
 This document explains the MCP server configuration, verification steps, and best practices.
 
 What changed
-- The MCP server config (.copilot/mcpServers.json) was updated to use `npx railway mcp`, keep `cwd` and `env`, and restrict the tool capabilities to a conservative default: `["shell", "network"]` for least privilege.
+- The MCP server config (.copilot/mcpServers.json) was updated to use `npx railway mcp`, keep `cwd` and `env`, and restrict the tool capabilities to a conservative default: `["shell", "network", "filesystem"]` for least privilege.
 
 Security notes
 - Do NOT commit real secrets. Set `RAILWAY_TOKEN` as a repository or runner secret and reference it via `${RAILWAY_TOKEN}`.
