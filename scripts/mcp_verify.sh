@@ -33,11 +33,11 @@ if [ "$INSTALL_DEPS" -eq 1 ]; then
 fi
 
 if [ -x "./node_modules/.bin/railway" ]; then
-  RAILWAY_CMD=( "./node_modules/.bin/railway" )
+  RAILWAY_CMD=("./node_modules/.bin/railway")
 elif command -v railway >/dev/null 2>&1; then
-  RAILWAY_CMD=( "railway" )
+  RAILWAY_CMD=("railway")
 else
-  RAILWAY_CMD=( "npx" "railway" )
+  RAILWAY_CMD=("npx" "railway")
 fi
 
 echo "Starting railway MCP (${RAILWAY_CMD[*]}) — logs will stream to stdout. Press Ctrl-C to stop."
@@ -46,5 +46,5 @@ echo "Starting railway MCP (${RAILWAY_CMD[*]}) — logs will stream to stdout. P
 "${RAILWAY_CMD[@]}" mcp
 
 # If you need to run headless or capture logs, redirect output to a file:
-# npx railway mcp > mcp.log 2>&1 &
+# railway mcp > mcp.log 2>&1 &
 # tail -f mcp.log
