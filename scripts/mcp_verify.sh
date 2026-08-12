@@ -4,6 +4,13 @@ set -euo pipefail
 # scripts/mcp_verify.sh
 # Usage: ./scripts/mcp_verify.sh
 # Ensure RAILWAY_TOKEN is exported in your environment, or provide it in a .env file.
+# If a .env exists in the repo root, load it for convenience.
+if [ -f .env ]; then
+  set +u
+  # shellcheck disable=SC1091
+  source .env
+  set -u
+fi
 
 if [ -f ".env" ]; then
   # Load local env vars for verification convenience.
