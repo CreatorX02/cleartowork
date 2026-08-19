@@ -11,6 +11,7 @@ PRD this codebase implements — this repo is **Phase 1: Compliance Register**.
 - **Better Auth** — email/password + optional Google, sessions in Postgres
 - **pg-boss** worker service — nightly expiry scan + alert emails (Resend)
 - **Cloudflare R2 / S3** (EU) — evidence files, presigned URLs ≤24h
+- **Stripe** — subscription billing (Checkout + hosted Billing Portal)
 
 ## Local development
 
@@ -27,7 +28,16 @@ npm run worker             # in a second terminal: job runner
 
 Without `RESEND_API_KEY`, alert emails are logged to the console instead of
 sent. Without `COMPANIES_HOUSE_API_KEY`, onboarding autofill degrades to
-manual entry.
+manual entry. Without `STRIPE_SECRET_KEY`, the billing page renders in a
+"not configured" state and the webhook returns 501 — everything else works.
+
+To exercise billing locally you need the Stripe CLI:
+
+```bash
+stripe listen --forward-to localhost:3000/api/stripe/webhook
+# copy the printed whsec_... into STRIPE_WEBHOOK_SECRET, then in another shell
+stripe trigger customer.subscription.updated
+```
 
 ## Deploying on Railway
 
@@ -44,6 +54,13 @@ requirement — see `../files/05_COMPLIANCE_SECURITY.md`):
    (start `npm run worker`). Needs `DATABASE_URL` and `RESEND_API_KEY`.
    Scheduling is inside pg-boss (nightly 06:00 UK) — no Railway cron needed.
 
+Then add a Stripe webhook endpoint pointing at
+`https://<railway-domain>/api/stripe/webhook`, subscribing to
+`checkout.session.completed`, `customer.subscription.*`, `invoice.paid` and
+`invoice.payment_failed`. Put its signing secret in `STRIPE_WEBHOOK_SECRET`
+on the **web** service, along with `STRIPE_SECRET_KEY` and the three
+`STRIPE_PRICE_*` IDs.
+
 ## Architecture notes
 
 - **Tenant isolation** — every tenant table carries `business_id`; all
@@ -55,8 +72,15 @@ requirement — see `../files/05_COMPLIANCE_SECURITY.md`):
   same transaction.
 - **Evidence storage** — private bucket only; access via presigned URLs
   hard-capped at 24h (`src/lib/storage.ts`).
+- **Billing** — the `businesses` row is a read-model of Stripe. Only the
+  webhook (`src/app/api/stripe/webhook/route.ts` → `syncSubscription()` in
+  `src/lib/billing.ts`) writes plan/status, so Checkout, the Billing Portal
+  and dunning all converge on one path. Every Stripe event ID is recorded in
+  `stripe_events` for idempotency.
 - **Prisma client** — generated into `src/generated/prisma` (gitignored);
   `npm run build` regenerates it.
+
+See `CLAUDE.md` for the full conventions and directory map.
 
 ## Phase 1 remaining work (tracked in the PRD §4)
 
@@ -64,6 +88,8 @@ requirement — see `../files/05_COMPLIANCE_SECURITY.md`):
 - [ ] Manual / share-code check recording with evidence upload
 - [ ] Fail/Refer guided next-steps page (DRAFT-watermarked until solicitor sign-off)
 - [ ] Email verification + alert emails via Resend (wired, needs key + domain)
+- [ ] Confirm the plan price points and entitlement caps in `src/lib/billing.ts`
+      (`PLANS` currently carries placeholder worker/site limits)
 - [ ] Cross-tenant access tests in CI (launch gate #11)
 - [ ] Sentry + BetterStack status page
 

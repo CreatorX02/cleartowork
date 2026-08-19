@@ -56,13 +56,33 @@ export default async function DashboardPage() {
             Compliance dashboard
           </p>
         </div>
-        <Link
-          href="/workers/new"
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Add worker
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/billing"
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-900"
+          >
+            Billing
+          </Link>
+          <Link
+            href="/workers/new"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Add worker
+          </Link>
+        </div>
       </div>
+
+      {business.status !== "active" && (
+        <p className="mb-6 rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+          {business.status === "past_due"
+            ? "We could not take your last payment."
+            : "Your subscription is cancelled."}{" "}
+          <Link href="/billing" className="font-medium underline">
+            Go to billing
+          </Link>{" "}
+          to keep expiry alerts running.
+        </p>
+      )}
 
       <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {stats.map((s) => (

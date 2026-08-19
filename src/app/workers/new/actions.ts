@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { logEvent } from "@/lib/events";
 import { requireBusiness } from "@/lib/tenant";
+import { planLimits } from "@/lib/billing";
 
 const schema = z
   .object({
@@ -29,6 +30,22 @@ const schema = z
 
 export async function addWorker(formData: FormData) {
   const { businessId, userId } = await requireBusiness();
+
+  // Plan entitlement. Checked here rather than in the UI so it also covers the
+  // CSV import path once that lands.
+  const business = await prisma.business.findUniqueOrThrow({
+    where: { id: businessId },
+    select: { plan: true },
+  });
+  const { maxWorkers, name: planName } = planLimits(business.plan);
+  const activeWorkers = await prisma.worker.count({
+    where: { businessId, status: "active" },
+  });
+  if (activeWorkers >= maxWorkers) {
+    throw new Error(
+      `The ${planName} plan covers ${maxWorkers} workers. Upgrade in Billing to add more.`,
+    );
+  }
 
   const parsed = schema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {

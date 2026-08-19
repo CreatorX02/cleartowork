@@ -107,7 +107,15 @@ model Business {
   companyNumber    String?        @map("company_number")
   sector           Sector
   plan             Plan           @default(solo)
-  stripeCustomerId String?        @map("stripe_customer_id")
+  /// Billing state below is a read-model of Stripe — only the webhook in
+  /// src/app/api/stripe/webhook/route.ts writes it (src/lib/billing.ts).
+  stripeCustomerId String?        @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?    @unique @map("stripe_subscription_id")
+  /// Stripe Price ID of the active subscription item; maps to `plan`
+  stripePriceId    String?        @map("stripe_price_id")
+  /// End of the paid-up period; null before the first successful payment
+  currentPeriodEnd DateTime?      @map("current_period_end")
+  cancelAtPeriodEnd Boolean       @default(false) @map("cancel_at_period_end")
   /// Days-before-expiry alert offsets, e.g. [90, 30, 14, 7, 0]
   alertSchedule    Json           @default("[90, 30, 14, 7, 0]") @map("alert_schedule")
   status           BusinessStatus @default(active)
@@ -352,4 +360,21 @@ model EventLog {
   @@index([businessId, occurredAt(sort: Desc)])
   @@index([entityType, entityId])
   @@map("event_log")
+}
+
+// ---------------------------------------------------------------------------
+// Billing (Stripe webhook idempotency)
+// ---------------------------------------------------------------------------
+
+/// One row per Stripe event we have already applied. Stripe retries delivery
+/// and can deliver out of order, so the webhook inserts here first and skips
+/// anything it has seen before.
+model StripeEvent {
+  /// The Stripe event ID (evt_...)
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now()) @map("processed_at")
+
+  @@index([processedAt(sort: Desc)])
+  @@map("stripe_events")
 }
