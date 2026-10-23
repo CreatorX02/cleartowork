@@ -19,8 +19,11 @@ Local verification
    npm install
    ./scripts/mcp_verify.sh
 
+   # Optional: force a fresh dependency install during verification
+   ./scripts/mcp_verify.sh --install
+
 What to check
-- The script attempts to run `npx railway mcp` and streams logs to the console.
+- The script validates `RAILWAY_TOKEN`, then runs `railway mcp` using a local binary first (`./node_modules/.bin/railway`), then global `railway`, then `npx railway` as a fallback.
 - If the MCP process requests an additional capability, you will see an error indicating which permission/tool is missing. Add only that tool to the `tools` list and re-run.
 
 If you prefer a different conservative tool list (for example including `filesystem`), discuss in the PR comments and we will update accordingly.
